@@ -1,0 +1,152 @@
+# The bare domain name which represents your Matrix identity.
+# Matrix user ids for your server will be of the form (`@user:<matrix-domain>`).
+#
+# Note: this playbook does not touch the server referenced here.
+# Installation happens on another server ("matrix.<matrix-domain>").
+#
+# If you've deployed using the wrong domain, you'll have to run the Uninstalling step,
+# because you can't change the Domain after deployment.
+#
+# Example value: example.com
+# matrix_domain: YOUR_BARE_DOMAIN_NAME_HERE
+matrix_domain: hypervasis.com
+
+# This is something which is provided to Let's Encrypt when retrieving SSL certificates for domains.
+#
+# In case SSL renewal fails at some point, you'll also get an email notification there.
+#
+# If you decide to use another method for managing SSL certifites (different than the default Let's Encrypt),
+# you won't be required to define this variable (see `docs/configuring-playbook-ssl-certificates.md`).
+#
+# Example value: someone@example.com
+matrix_ssl_lets_encrypt_support_email: 'stratos@gerakakis.net'
+
+# A shared secret (between Coturn and Synapse) used for authentication.
+# You can put any string here, but generating a strong one is preferred (e.g. `pwgen -s 64 1`).
+matrix_coturn_turn_static_auth_secret: '6tbyVUbuKnp4BE6c7ghGPwayYb47Gfpo'
+
+# A secret used to protect access keys issued by the server.
+# You can put any string here, but generating a strong one is preferred (e.g. `pwgen -s 64 1`).
+matrix_synapse_macaroon_secret_key: 'tyVNxs935rMwPKByjDBL9ArDatibjZ2z'
+
+# A Postgres password to use for the superuser Postgres user (called `matrix` by default).
+#
+# The playbook creates additional Postgres users and databases (one for each enabled service)
+# using this superuser account.
+matrix_postgres_connection_password: 'F8NCRYw4632fgJgSBosRiqdAopQAguf7'
+
+
+# Setup Shared secret auth
+matrix_synapse_ext_password_provider_shared_secret_auth_enabled: true
+matrix_synapse_ext_password_provider_shared_secret_auth_shared_secret: nxU3AIxUtC5xUEiix7WOIfCVDWM05Hr70kMoyq1siZAyGASDVVu7bji4ca2vPunJ
+
+# Setup Hangouts bridge
+# matrix_mautrix_hangouts_enabled: true
+
+matrix_jitsi_enabled: true
+matrix_jitsi_enable_auth: true
+matrix_jitsi_enable_guests: true
+
+# Run `bash inventory/scripts/jitsi-generate-passwords.sh` to generate these passwords,
+# or define your own strong passwords manually.
+matrix_jitsi_jicofo_component_secret: "Hq397Uk4eVTxtmmr8oTTBu2u35smcDm2"
+matrix_jitsi_jicofo_auth_password: "UnPjLZttjUEWgbgDDS95BnDx2eo2Xaei"
+matrix_jitsi_jvb_auth_password: "7PH25zjSBDHZtAjppgckJYoFxk2Aew6f"
+matrix_jitsi_jibri_recorder_password: "uxQoxS5kEr9GeU8L8xMvbpR2PB72C9m9"
+matrix_jitsi_jibri_xmpp_password: "qbFoUePi6m2E9Z3J97tkUuLv2kBf3kUJ"
+
+
+# Slack integration bridge (Seems cannot install it)
+# matrix_appservice_slack_enabled: true
+# matrix_appservice_slack_control_room_id: "!nTFVHNgvLWZnlGLJJV:hypervasis.com"
+
+# Disable ma1sd (seems like it is not installable anyways, by default)
+matrix_ma1sd_enabled: false
+
+
+# Dimension enable
+matrix_dimension_enabled: true
+matrix_dimension_admins:
+  - "@dimension:hypervasis.com"
+matrix_dimension_access_token: "syt_ZGltZW5zaW9u_wccyJcmYKoNXySgaWBsC_19P615"
+
+# Serve the base domain
+# https://github.com/spantaleev/matrix-docker-ansible-deploy/blob/master/docs/configuring-playbook-base-domain-serving.md
+matrix_nginx_proxy_base_domain_serving_enabled: true
+
+
+# Disable generation and retrieval of SSL certs
+matrix_ssl_retrieval_method: none
+
+# Configure Nginx to only use plain HTTP
+matrix_nginx_proxy_https_enabled: false
+
+# Don't bind any HTTP or federation port to the host
+# (Traefik will proxy directly into the containers)
+matrix_nginx_proxy_container_http_host_bind_port: ''
+matrix_nginx_proxy_container_federation_host_bind_port: ''
+
+# Disable Coturn because it needs SSL certs
+# (Clients can, though exposing IP address, use Matrix.org TURN)
+matrix_coturn_enabled: false
+
+# All containers need to be on the same Docker network as Traefik
+# (This network should already exist and Traefik should be using this network)
+matrix_docker_network: 'traefik-public'
+
+matrix_nginx_proxy_container_extra_arguments:
+  # May be unnecessary depending on Traefik config, but can't hurt
+  - '--label "traefik.enable=true"'
+
+  # The Nginx proxy container will receive traffic from these subdomains
+  - '--label "traefik.http.routers.matrix-nginx-proxy.rule=Host(`{{ matrix_server_fqn_matrix }}`,`{{ matrix_server_fqn_element }}`,`{{ matrix_server_fqn_dimension }}`,`{{ matrix_server_fqn_jitsi }}`)"'
+
+  # (The 'web-secure' entrypoint must bind to port 443 in Traefik config)
+  - '--label "traefik.http.routers.matrix-nginx-proxy.entrypoints=websecure"'
+
+  # (The 'default' certificate resolver must be defined in Traefik config)
+  - '--label "traefik.http.routers.matrix-nginx-proxy.tls.certResolver=letsencryptresolver"'
+
+  # The Nginx proxy container uses port 8080 internally
+  - '--label "traefik.http.services.matrix-nginx-proxy.loadbalancer.server.port=8080"'
+
+matrix_synapse_container_extra_arguments:
+  # May be unnecessary depending on Traefik config, but can't hurt
+  - '--label "traefik.enable=true"'
+
+  # The Synapse container will receive traffic from this subdomain
+  - '--label "traefik.http.routers.matrix-synapse.rule=Host(`{{ matrix_server_fqn_matrix }}`)"'
+
+  # (The 'synapse' entrypoint must bind to port 8448 in Traefik config)
+  - '--label "traefik.http.routers.matrix-synapse.entrypoints=synapse"'
+
+  # (The 'default' certificate resolver must be defined in Traefik config)
+  - '--label "traefik.http.routers.matrix-synapse.tls.certResolver=letsencryptresolver"'
+
+  # The Synapse container uses port 8048 internally
+  - '--label "traefik.http.services.matrix-synapse.loadbalancer.server.port=8048"'
+
+
+matrix_synapse_admin_enabled: true
+matrix_synapse_admin_public_endpoint: /synapse
+
+
+# Don't bind any HTTP or federation port to the host
+# (Traefik will proxy directly into the containers)
+matrix_synapse_admin_container_http_host_bind_port: ""
+
+matrix_synapse_admin_container_extra_arguments:
+    # May be unnecessary depending on Traefik config, but can't hurt
+    - '--label "traefik.enable=true"'
+
+    # The Synapse Admin container will only receive traffic from this subdomain and path
+    - '--label "traefik.http.routers.matrix-synapse-admin.rule=(Host(`{{ matrix_server_fqn_matrix }}`) && Path(`{{matrix_synapse_admin_public_endpoint}}`))"'
+
+    # (Define your entrypoint)
+    - '--label "traefik.http.routers.matrix-synapse-admin.entrypoints=web-secure"'
+
+    # (The 'default' certificate resolver must be defined in Traefik config)
+    - '--label "traefik.http.routers.matrix-synapse-admin.tls.certResolver=default"'
+
+    # The Synapse Admin container uses port 80 by default
+    - '--label "traefik.http.services.matrix-synapse-admin.loadbalancer.server.port=80"'
